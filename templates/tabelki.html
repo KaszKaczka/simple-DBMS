@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rekinki</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background-color: #a8c4e8;
+        font-family: Arial, sans-serif;
+      }
+      .highlight {
+        background-color: #f0f8ff !important;
+        cursor: pointer;
+      }
+      .selected {
+        background-color: #d1e7fd !important;
+      }
+      .action-buttons {
+        display: none;
+      }
+      tr.selected .action-buttons {
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+  <div class="container my-4">
+    <div class="text-center">
+      <img src="static/images/shark.png" alt="Rekin" class="img-fluid mb-3" style="max-width: 400px;">
+    </div>
+    <div class="container my-4">
+      <h1 class="text-center mb-4">Rekinki</h1>
+
+      <!-- Dropdown for selecting table -->
+      <div class="d-flex justify-content-center align-items-center mb-4">
+        <div class="me-2">
+          <select
+            class="form-select"
+            id="tableSelector"
+            onchange="updateTableVisibility()"
+          >
+            <option value="" disabled selected>Wybierz tabelę</option>
+            {% for table_name in tables.keys() %}
+            <option value="{{ table_name }}">
+              {{ " ".join(table_name.capitalize().split("_")) }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <!-- Tables container -->
+      <div id="tablesContainer">
+        {% for table_name, table_data in tables.items() %}
+        <div
+          class="table-container mb-5"
+          id="table-{{ table_name }}"
+          style="display: none"
+        >
+          <div class="table-responsive">
+            <table class="table table-striped table-bordered data-table">
+              <thead class="table-dark">
+                <tr>
+                  {% for column in table_data.columns %}
+                  <th>{{ " ".join(column.split("_")).capitalize() }}</th>
+                  {% endfor %}
+                  <th>Opcje</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in table_data.rows %}
+                <tr
+                  data-id="{{ row[0] }}"
+                  data-table="{{ table_name }}"
+                  onclick="selectRow(this)"
+                >
+                  {% for cell in row %}
+                  <td>{{ cell }}</td>
+                  {% endfor %}
+                  <td>
+                    <div class="action-buttons">
+                      <button
+                        class="btn btn-warning btn-sm me-1"
+                        onclick="startEditRecord(this)"
+                      >
+                        Modify
+                      </button>
+                      <button
+                        class="btn btn-danger btn-sm"
+                        onclick="deleteRecord(this)"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div id="addRecordForm" class="mb-4" style="display: none">
+      <h4 class="text-center">Dodaj nowy wiersz do tabeli</h4>
+      <form id="recordForm" class="mx-auto" style="max-width: 600px">
+        <div class="mb-3" id="formFields"></div>
+        <button type="submit" class="btn btn-primary w-100">
+          Dodaj wiersz
+        </button>
+      </form>
+    </div>
+
+    <!-- Include JavaScript libraries -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+      // Initialize DataTables
+       $(document).ready(function () {
+    $(".data-table").DataTable({
+      pageLength: 10,
+      lengthChange: false,
+      language: {
+        search: "Szukaj:",
+        lengthMenu: "Pokaż _MENU_ wpisów",
+        zeroRecords: "Brak wyników do wyświetlenia",
+        info: "Wyświetlanie _START_ - _END_ z _TOTAL_ wpisów",
+        infoEmpty: "Brak dostępnych wpisów",
+        infoFiltered: "(filtrowane z _MAX_ wszystkich wpisów)",
+        paginate: {
+          first: "Pierwsza",
+          last: "Ostatnia",
+          next: "Następna",
+          previous: "Poprzednia"
+        }
+      }
+    });
+  });
+      // Show the selected table
+      function updateTableVisibility() {
+        const selectedTable = document.getElementById("tableSelector").value;
+        document.querySelectorAll(".table-container").forEach((container) => {
+          container.style.display = "none";
+        });
+        if (selectedTable) {
+          document.getElementById("table-" + selectedTable).style.display =
+            "block";
+        }
+      }
+
+      // Highlight selected row
+      function selectRow(row) {
+        document
+          .querySelectorAll("tr.selected")
+          .forEach((r) => r.classList.remove("selected"));
+        row.classList.add("selected");
+      }
+
+
+
+      // Delete record
+      function deleteRecord(button) {
+        const row = button.closest("tr");
+        const id = row.dataset.id;
+        const table = row.dataset.table;
+
+        fetch(`/usun_rekord?id=${id}&tabela=${table}`, {
+          method: "DELETE",
+        }).then((response) => {
+          if (response.ok) {
+            row.remove();
+          } else {
+            alert("Failed to delete record");
+          }
+        });
+      }
+
+      // Edit record
+      function startEditRecord(button) {
+        const row = button.closest("tr");
+        const cells = row.querySelectorAll("td");
+        const actionCell = cells[cells.length - 1];
+
+        for (let i = 1; i < cells.length - 1; i++) {
+          const value = cells[i].textContent;
+          cells[
+            i
+          ].innerHTML = `<input type="text" class="form-control" value="${value}">`;
+        }
+
+        actionCell.innerHTML = `<button class="btn btn-success btn-sm" onclick="saveRecord(this)">Save</button>`;
+      }
+
+      // Save record
+      function saveRecord(button) {
+        const row = button.closest("tr");
+        const id = row.dataset.id;
+        const table = row.dataset.table;
+
+        const cells = row.querySelectorAll("td");
+        const newData = [];
+
+        for (let i = 1; i < cells.length - 1; i++) {
+          const input = cells[i].querySelector("input");
+          newData.push(input.value);
+        }
+
+        fetch(`/zmodyfikuj_rekord`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ id, tabela: table, dane: newData }),
+        }).then((response) => {
+          if (response.ok) {
+            for (let i = 1; i < cells.length - 1; i++) {
+              cells[i].textContent = newData[i - 1];
+            }
+            cells[cells.length - 1].innerHTML = `
+                    <button class="btn btn-warning btn-sm me-1" onclick="startEditRecord(this)">Modify</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteRecord(this)">Delete</button>
+                `;
+          } else {
+            alert("Failed to save changes.");
+          }
+        });
+      }
+      const tables = {{ tables | tojson }};
+      // Show the selected table
+      function updateTableVisibility() {
+          const selectedTable = document.getElementById("tableSelector").value;
+          document.querySelectorAll(".table-container").forEach((container) => {
+          container.style.display = "none";
+          });
+          if (selectedTable) {
+          document.getElementById("table-" + selectedTable).style.display = "block";
+          showAddRecordForm(); // Show the add record form when a table is selected
+          }
+      }
+
+      // Show add record form based on the selected table
+      function showAddRecordForm() {
+          const selectedTable = document.getElementById("tableSelector").value;
+          const formFieldsContainer = document.getElementById("formFields");
+
+          // Clear any existing fields
+          formFieldsContainer.innerHTML = "";
+
+          if (selectedTable) {
+          const tableData = tables[selectedTable]; // Accessing the passed 'tables' object in JS
+          const columns = tableData.columns;
+
+          // Generate input fields for each column (excluding the first column)
+          columns.slice(1).forEach((column) => {
+              const columnName = column.replace(/_/g, " ");
+              const inputField = document.createElement("div");
+              inputField.classList.add("mb-3");
+
+              inputField.innerHTML = `
+              <div class="mb-3 row">
+                <label for="${column}" class="col-sm-4 col-form-label">${columnName}</label>
+                <div class="col-sm-8">
+                  <input type="text" class="form-control" id="${column}" name="${column}" required>
+                </div>
+              </div>
+            `;
+              formFieldsContainer.appendChild(inputField);
+          });
+
+          // Show the form
+          document.getElementById("addRecordForm").style.display = "block";
+          }
+      }
+
+      // Submit new record
+      document
+        .getElementById("recordForm")
+        .addEventListener("submit", function (e) {
+          e.preventDefault();
+
+          const selectedTable = document.getElementById("tableSelector").value;
+          const formData = new FormData(this);
+          const newData = {};
+
+          // Collect form data
+          formData.forEach((value, key) => {
+            newData[key] = value;
+          });
+
+          // Send data to the backend
+          fetch("/dodaj_rekord", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ tabela: selectedTable, dane: newData }),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              alert(data.message);
+              if (data.message === "Rekord został dodany pomyślnie") {
+                location.reload(); // Reload the page to reflect the new record
+              }
+            })
+            .catch((error) => {
+              alert("Failed to add record.");
+            });
+        });
+    </script>
+<button
+  id="logoutButton"
+  class="btn btn-primary"
+  onclick="logoutUser()"
+>
+  Wyloguj
+</button>
+
+<style>
+  #logoutButton {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background-color: #003366; /* Granatowy kolor */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 1000; /* Zapewnia, że będzie na wierzchu */
+  }
+  #logoutButton:hover {
+    background-color: #002244; /* Ciemniejszy odcień granatowego na hover */
+  }
+</style>
+
+<script>
+  // Funkcja do obsługi wylogowania
+  function logoutUser() {
+    // Przekierowanie na stronę wylogowania lub inna akcja
+    window.location.href = "/logout";
+  }
+</script>
+
+  </body>
+</html>
